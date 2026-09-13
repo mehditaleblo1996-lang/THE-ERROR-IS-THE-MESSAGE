@@ -1,0 +1,44 @@
+name: Repository dump
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_repo:
+        description: Repository to archive (owner/repo); blank means this repository
+        required: false
+        type: string
+
+permissions:
+  contents: write
+  issues: read
+  pull-requests: read
+
+jobs:
+  dump:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Dump repository
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DEFAULT_REPO: ${{ github.repository }}
+          INPUT_REPO: ${{ inputs.target_repo }}
+        run: |
+          REPO="${INPUT_REPO:-$DEFAULT_REPO}"
+          python tools/repo_dump.py --repo "$REPO" --output dump/latest
+      - name: Commit dump back to repository
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add dump/latest
+          if git diff --cached --quiet; then
+            echo "No dump changes to commit"
+            exit 0
+          fi
+          git commit -m "Archive repository data"
+          git push
